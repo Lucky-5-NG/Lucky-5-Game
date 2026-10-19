@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lucky 5</title>
+<style>
+body{font-family:system-ui;background:#0f172a;color:white;margin:0;padding:16px;text-align:center}
+h1{margin:8px 0;color:#facc15}
+.btns{display:flex;gap:8px;justify-content:center;margin:12px 0;flex-wrap:wrap}
+.btn{padding:10px 18px;border-radius:10px;border:none;font-weight:bold;cursor:pointer}
+.btn.active{background:#facc15;color:black}
+.btn.inactive{background:#334155;color:white}
+#players{max-width:400px;margin:12px auto}
+.prow{display:flex;gap:6px;align-items:center;background:#1e293b;border-radius:12px;padding:8px;margin-bottom:8px}
+.prow input{flex:1;min-width:0;padding:8px;border-radius:8px;border:none;font-size:15px}
+.bal{font-weight:bold;color:#22c55e;white-space:nowrap}
+.dep{padding:8px 10px;border-radius:8px;border:none;background:#facc15;font-weight:bold;cursor:pointer}
+#board{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:400px;margin:20px auto}
+.card{background:#1e293b;border:2px solid #facc15;border-radius:12px;height:80px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;cursor:pointer}
+.card.flipped{background:white;color:black}
+#info{background:#1e293b;padding:12px;border-radius:12px;max-width:400px;margin:auto;line-height:1.6}
+.winner{color:#22c55e;font-weight:bold;font-size:18px}
+.warn{color:#f87171;font-weight:bold}
+.note{font-size:12px;color:#94a3b8;max-width:400px;margin:8px auto}
+</style>
+</head>
+<body>
+<h1>LUCKY 5</h1>
+<p>2-4 Players | 5 Cards Each | Highest Wins</p>
+<div class="btns">
+<button class="btn active" id="b2" onclick="setPlayers(2)">2 Players (10 cards)</button>
+<button class="btn inactive" id="b3" onclick="setPlayers(3)">3 Players (15 cards)</button>
+<button class="btn inactive" id="b4" onclick="setPlayers(4)">4 Players (20 cards)</button>
+</div>
+<div id="players"></div>
+<div class="prow" style="max-width:400px;margin:8px auto">
+<span>Stake (N200 or more):</span>
+<input id="stake" type="number" min="200" step="100" value="200" oninput="setStake()">
+</div>
+<div class="note">TEST WALLET: these are test coins, not real money. Every player pays the same stake.</div>
+<div id="board"></div>
+<div id="info">Tap a ? to reveal number. Each player picks 5.</div>
+<button class="btn" style="background:#22c55e;color:black;margin-top:12px" onclick="resetGame()">Reset Board</button>
+<div class="note" id="ownerline"></div>
+
+<script>
+const MIN_STAKE=200, DEPOSIT=200;
+let ENTRY=200;
+function setStake(){
+ if(gameStarted && !gameOver) return;
+ const v=parseInt(document.getElementById('stake').value,10);
+ ENTRY=(v>=MIN_STAKE)?v:MIN_STAKE;
+ document.getElementById('info').innerHTML=`Each player needs N${ENTRY} to play. Tap a ? to start.`;
+}
+let numPlayers=2, totalCards=10, cards=[], revealed=[], picks=[[],[],[],[]], sums=[0,0,0,0], currentPlayer=0;
+let names=['Player 1','Player 2','Player 3','Player 4'];
+let wallets=[0,0,0,0], ownerBank=0, gameStarted=false, gameOver=false;
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function nm(p){return esc(names[p].trim()||('Player '+(p+1)))}
+
+function setPlayers(n){
+ refundIfNeeded();
+ numPlayers=n; totalCards=n*5;
+ document.querySelectorAll('.btns .btn').forEach(b=>b.className='btn inactive');
+ document.getElementById('b'+n).className='btn active';
+ resetGame();
+}
+
+function renderPlayers(){
+ const box=document.getElementById('players'); box.innerHTML='';
+ for(let p=0;p<numPlayers;p++){
+  const row=document.createElement('div'); row.className='prow';
+  const input=document.createElement('input');
+  input.value=names[p]; input.maxLength=15; input.placeholder='Name';
+  input.oninput=()=>{names[p]=input.value};
+  const bal=document.createElement('span'); bal.className='bal'; bal.textContent='N'+wallets[p];
+  const dep=document.createElement('button'); dep.className='dep'; dep.textContent='+N'+DEPOSIT;
+  dep.onclick=()=>{wallets[p]+=DEPOSIT; renderPlayers();};
+  const dep2=document.createElement('button'); dep2.className='dep'; dep2.textContent='+N1000';
+  dep2.onclick=()=>{wallets[p]+=1000; renderPlayers();};
+  row.appendChild(input); row.appendChild(bal); row.appendChild(dep); row.appendChild(dep2);
+  box.appendChild(row);
+ }
+ document.getElementById('stake').disabled=(gameStarted && !gameOver);
+ document.getElementById('ownerline').textContent='Your earnings (test): N'+ownerBank;
+}
+
+function refundIfNeeded(){
+ if(gameStarted && !gameOver){
+  for(let p=0;p<numPlayers;p++) wallets[p]+=ENTRY;
+ }
+ gameStarted=false;
+}
+
+function resetGame(){
+ refundIfNeeded();
+ gameOver=false;
+ cards=Array.from({length:totalCards},(_,i)=>i+1);
+ for(let i=cards.length-1;i>0;i--){
+  const j=Math.floor(Math.random()*(i+1));
+  [cards[i],cards[j]]=[cards[j],cards[i]];
+ }
+ revealed=Array(totalCards).fill(false);
+ picks=[[],[],[],[]]; sums=[0,0,0,0]; currentPlayer=0;
+ renderPlayers(); render();
+ document.getElementById('info').innerHTML=`Each player needs N${ENTRY} to play. <b>${nm(0)}</b> turn - Tap a ?`;
+}
+
+function render(){
+ const board=document.getElementById('board'); board.innerHTML='';
+ for(let i=0;i<totalCards;i++){
+  const div=document.createElement('div');
+  div.className='card'+(revealed[i]?' flipped':'');
+  div.textContent=revealed[i]?cards[i]:'?';
+  div.onclick=()=>pickCard(i);
+  board.appendChild(div);
+ }
+}
+
+function pickCard(i){
+ if(gameOver) return;
+ if(revealed[i]) return;
+ if(!gameStarted){
+  setStake();
+  document.getElementById('stake').value=ENTRY;
+  const broke=[];
+  for(let p=0;p<numPlayers;p++){ if(wallets[p]<ENTRY) broke.push(nm(p)); }
+  if(broke.length){
+   document.getElementById('info').innerHTML=`<span class="warn">${broke.join(', ')} must deposit N${ENTRY} first.</span>`;
+   return;
+  }
+  for(let p=0;p<numPlayers;p++) wallets[p]-=ENTRY;
+  gameStarted=true;
+  renderPlayers();
+ }
+ if(picks[currentPlayer].length>=5) return;
+ revealed[i]=true;
+ picks[currentPlayer].push(cards[i]);
+ sums[currentPlayer]+=cards[i];
+ let nextPlayer=(currentPlayer+1)%numPlayers;
+ let tries=0;
+ while(picks[nextPlayer].length>=5 && tries<4){nextPlayer=(nextPlayer+1)%numPlayers; tries++}
+ currentPlayer=nextPlayer;
+ render(); checkEnd();
+}
+
+function checkEnd(){
+ let totalPicks=picks.slice(0,numPlayers).reduce((a,b)=>a+b.length,0);
+ let info='';
+ for(let p=0;p<numPlayers;p++){ info+=`${nm(p)}: [${picks[p].join(',')}] = ${sums[p]}<br>`; }
+ if(totalPicks>=totalCards){
+  gameOver=true;
+  let max=Math.max(...sums.slice(0,numPlayers));
+  let winners=[];
+  sums.slice(0,numPlayers).forEach((s,p)=>{if(s===max)winners.push(p)});
+  let pot=numPlayers*ENTRY;
+  let ownerCut=pot*0.1; let winnerPrize=pot*0.9;
+  let w=winners[0];
+  let byTiebreak=false;
+  if(winners.length>1){
+   byTiebreak=true;
+   let best=-1;
+   winners.forEach(p=>{
+    const top=Math.max(...picks[p]);
+    if(top>best){best=top; w=p;}
+   });
+  }
+  wallets[w]+=winnerPrize; ownerBank+=ownerCut;
+  info+=`<span class="winner">${nm(w)} WINS with ${max}! Prize N${winnerPrize}</span>`;
+  if(byTiebreak) info+=`<br>Same total, so the highest card decided.`;
+  renderPlayers();
+ } else { info+=`Next: <b>${nm(currentPlayer)}</b> turn`; }
+ document.getElementById('info').innerHTML=info;
+}
+
+resetGame();
+</script>
+</body>
+</html>
